@@ -4,6 +4,7 @@ Parses Nmap XML output into structured Python dictionaries
 '''
 
 import xml.etree.ElementTree as ET
+import os
 from typing import Dict, List, Optional
 
 class NmapXMLParser:
