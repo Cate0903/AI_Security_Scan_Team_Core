@@ -1,0 +1,3 @@
+# ML Models e Data (se molto grandi)
+models/*.pkl
+data/*.json
