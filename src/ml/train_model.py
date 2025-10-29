@@ -1,245 +1,354 @@
+#!/usr/bin/env python3
+"""
+ML Model Training with NVD Data
+Addestra modello ML usando dati reali da NVD
+"""
+
 import json
-import pandas as pd
+import pickle
+import argparse
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-import joblib
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 import os
 
-def load_dataset(filename="data/cve_dataset.json"):
+
+def load_dataset(filepath='data/nvd_cve_dataset.json'):
     """
-    Carica il dataset CVE
+    Carica dataset da file JSON
     
     Args:
-        filename: Path del file JSON
-    
+        filepath: Path al file dataset
+        
     Returns:
-        DataFrame pandas
+        list: Lista di vulnerabilità
     """
-    with open(filename, 'r') as f:
+    print(f"📂 Caricamento dataset: {filepath}")
+    
+    if not os.path.exists(filepath):
+        print(f"❌ File non trovato: {filepath}")
+        print("\n💡 Genera dataset con:")
+        print(f"   python3 src/ml/nvd_data_collector.py")
+        return None
+    
+    with open(filepath, 'r') as f:
         data = json.load(f)
     
-    df = pd.DataFrame(data)
-    print(f"✅ Dataset caricato: {len(df)} vulnerabilità")
-    return df
+    print(f"✓ Caricati {len(data)} campioni")
+    
+    # Statistiche dataset
+    severity_counts = {}
+    for item in data:
+        sev = item.get('severity', 'UNKNOWN')
+        severity_counts[sev] = severity_counts.get(sev, 0) + 1
+    
+    print(f"\n📊 Distribuzione severity:")
+    for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
+        count = severity_counts.get(sev, 0)
+        pct = (count / len(data) * 100) if data else 0
+        print(f"  {sev:10s}: {count:3d} ({pct:5.1f}%)")
+    
+    return data
 
-def prepare_features(df):
+
+def prepare_features(vulnerabilities):
     """
-    Prepara le feature per il training
+    Prepara features e labels per training
     
     Args:
-        df: DataFrame con i dati grezzi
-    
+        vulnerabilities: Lista di dict con dati CVE
+        
     Returns:
-        X (features), y (target)
+        tuple: (X, y) features e labels
     """
     print("\n🔧 Preparazione features...")
     
-    # Feature 1: CVSS Score (già numerico)
-    df['cvss_score_feature'] = df['cvss_score']
-    
-    # Feature 2: Attack Vector (categorico → numerico)
+    # Mapping per encoding categorico
     attack_vector_map = {
-        'NETWORK': 3,      # Più pericoloso
-        'ADJACENT': 2,
-        'LOCAL': 1,
-        'PHYSICAL': 0      # Meno pericoloso
+        'NETWORK': 2, 'ADJACENT_NETWORK': 1, 'ADJACENT': 1,
+        'LOCAL': 0, 'PHYSICAL': 0
     }
-    df['attack_vector_numeric'] = df['attack_vector'].map(attack_vector_map)
+    attack_complexity_map = {'LOW': 1, 'HIGH': 0}
+    privileges_map = {'NONE': 2, 'LOW': 1, 'HIGH': 0}
+    user_interaction_map = {'NONE': 1, 'REQUIRED': 0}
+    scope_map = {'CHANGED': 1, 'UNCHANGED': 0}
+    impact_map = {'HIGH': 2, 'LOW': 1, 'NONE': 0}
     
-    # Feature 3: Attack Complexity (categorico → numerico)
-    complexity_map = {
-        'LOW': 1,     # Più facile = più pericoloso
-        'HIGH': 0     # Più difficile = meno pericoloso
-    }
-    df['complexity_numeric'] = df['attack_complexity'].map(complexity_map)
+    X = []
+    y = []
+    skipped = 0
     
-    # Feature 4: Privileges Required (categorico → numerico)
-    privileges_map = {
-        'NONE': 2,    # Nessun privilegio richiesto = molto pericoloso
-        'LOW': 1,
-        'HIGH': 0     # Serve admin = meno pericoloso
-    }
-    df['privileges_numeric'] = df['privileges_required'].map(privileges_map)
+    for vuln in vulnerabilities:
+        try:
+            # Verifica campi richiesti
+            if not all(key in vuln for key in ['cvss_score', 'severity']):
+                skipped += 1
+                continue
+            
+            # Estrai features (9 features totali)
+            features = [
+                float(vuln.get('cvss_score', 0.0)),
+                attack_vector_map.get(vuln.get('attack_vector', 'LOCAL'), 0),
+                attack_complexity_map.get(vuln.get('attack_complexity', 'HIGH'), 0),
+                privileges_map.get(vuln.get('privileges_required', 'HIGH'), 0),
+                user_interaction_map.get(vuln.get('user_interaction', 'REQUIRED'), 0),
+                scope_map.get(vuln.get('scope', 'UNCHANGED'), 0),
+                impact_map.get(vuln.get('confidentiality_impact', 'NONE'), 0),
+                impact_map.get(vuln.get('integrity_impact', 'NONE'), 0),
+                impact_map.get(vuln.get('availability_impact', 'NONE'), 0)
+            ]
+            
+            X.append(features)
+            y.append(vuln['severity'])
+            
+        except Exception as e:
+            skipped += 1
+            continue
     
-    # Feature 5: User Interaction (categorico → numerico)
-    interaction_map = {
-        'NONE': 1,       # Nessuna interazione = più pericoloso
-        'REQUIRED': 0    # Serve click utente = meno pericoloso
-    }
-    df['interaction_numeric'] = df['user_interaction'].map(interaction_map)
+    if skipped > 0:
+        print(f"⚠️  Saltati {skipped} campioni con dati mancanti")
     
-    # Feature 6: Scope (categorico → numerico)
-    scope_map = {
-        'CHANGED': 1,     # Impatta oltre il componente vulnerabile
-        'UNCHANGED': 0
-    }
-    df['scope_numeric'] = df['scope'].map(scope_map)
+    print(f"✓ Preparati {len(X)} campioni")
+    print(f"  Features: 9")
+    print(f"  Classes: {len(set(y))}")
     
-    # Feature 7-9: Impact metrics (categorico → numerico)
-    impact_map = {
-        'HIGH': 2,
-        'LOW': 1,
-        'NONE': 0
-    }
-    df['confidentiality_numeric'] = df['confidentiality_impact'].map(impact_map)
-    df['integrity_numeric'] = df['integrity_impact'].map(impact_map)
-    df['availability_numeric'] = df['availability_impact'].map(impact_map)
-    
-    # Seleziona feature e target
-    feature_columns = [
-        'cvss_score_feature',
-        'attack_vector_numeric',
-        'complexity_numeric',
-        'privileges_numeric',
-        'interaction_numeric',
-        'scope_numeric',
-        'confidentiality_numeric',
-        'integrity_numeric',
-        'availability_numeric'
-    ]
-    
-    X = df[feature_columns]
-    y = df['severity']
-    
-    print(f"   Features selezionate: {len(feature_columns)}")
-    print(f"   Feature names: {feature_columns}")
-    
-    return X, y
+    return np.array(X), np.array(y)
 
-def train_model(X, y):
+
+def train_model(X, y, test_size=0.2, random_state=42):
     """
-    Addestra il modello Random Forest
+    Addestra modello Random Forest
     
     Args:
         X: Features
-        y: Target (severity)
-    
+        y: Labels
+        test_size: Percentuale test set
+        random_state: Random seed
+        
     Returns:
-        model, X_train, X_test, y_train, y_test
+        tuple: (model, X_test, y_test, y_pred)
     """
-    print("\n🌲 Training Random Forest...")
+    print(f"\n🤖 Training Random Forest Classifier...")
     
-    # Split train/test (80/20)
+    # Split train/test
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X, y, test_size=test_size, random_state=random_state, stratify=y
     )
     
-    print(f"   Training set: {len(X_train)} samples")
-    print(f"   Test set: {len(X_test)} samples")
+    print(f"  Train set: {len(X_train)} samples")
+    print(f"  Test set:  {len(X_test)} samples")
     
-    # Crea e addestra il modello
+    # Addestra modello
     model = RandomForestClassifier(
-        n_estimators=100,      # 100 alberi
-        max_depth=10,          # Profondità massima
-        random_state=42,
-        n_jobs=-1              # Usa tutti i core CPU
+        n_estimators=100,
+        max_depth=10,
+        random_state=random_state,
+        n_jobs=-1
     )
     
-    print("   Addestramento in corso...")
+    print(f"\n  Training in corso...")
     model.fit(X_train, y_train)
-    print("   ✅ Modello addestrato!")
     
-    return model, X_train, X_test, y_train, y_test
+    print(f"✓ Training completato")
+    
+    # Predizioni
+    y_pred = model.predict(X_test)
+    
+    return model, X_test, y_test, y_pred
 
-def evaluate_model(model, X_train, X_test, y_train, y_test):
+
+def evaluate_model(model, X_test, y_test, y_pred):
     """
-    Valuta le performance del modello
+    Valuta performance del modello
     
     Args:
         model: Modello addestrato
-        X_train, X_test, y_train, y_test: Dati di training e test
+        X_test: Test features
+        y_test: Test labels
+        y_pred: Predizioni
     """
-    print("\n📊 Valutazione modello...")
+    print(f"\n{'='*70}")
+    print("📊 EVALUATION RESULTS")
+    print(f"{'='*70}")
     
-    # Accuracy su training set
-    train_predictions = model.predict(X_train)
-    train_accuracy = accuracy_score(y_train, train_predictions)
-    print(f"\n   Training Accuracy: {train_accuracy:.2%}")
+    # Accuracy
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f"\n🎯 Accuracy: {accuracy:.2%}")
     
-    # Accuracy su test set
-    test_predictions = model.predict(X_test)
-    test_accuracy = accuracy_score(y_test, test_predictions)
-    print(f"   Test Accuracy: {test_accuracy:.2%}")
+    # Classification report
+    print(f"\n📈 Classification Report:")
+    print(classification_report(y_test, y_pred, zero_division=0))
     
-    # Check overfitting
-    if train_accuracy - test_accuracy > 0.1:
-        print("   ⚠️  Possibile overfitting!")
-    else:
-        print("   ✅ Nessun overfitting rilevato")
+    # Confusion matrix
+    print(f"🔢 Confusion Matrix:")
+    cm = confusion_matrix(y_test, y_pred, labels=model.classes_)
     
-    # Classification Report dettagliato
-    print("\n📋 Classification Report:")
-    print(classification_report(y_test, test_predictions))
+    # Header
+    print(f"\n{'':12s}", end='')
+    for label in model.classes_:
+        print(f"{label:>10s}", end='')
+    print()
     
-    # Confusion Matrix
-    print("🔢 Confusion Matrix:")
-    cm = confusion_matrix(y_test, test_predictions, 
-                          labels=['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
-    print(cm)
+    # Righe
+    for i, label in enumerate(model.classes_):
+        print(f"{label:12s}", end='')
+        for j in range(len(model.classes_)):
+            print(f"{cm[i][j]:>10d}", end='')
+        print()
     
-    # Feature Importance
-    print("\n🔍 Feature Importance:")
+    # Feature importance
+    print(f"\n🔍 Feature Importance:")
     feature_names = [
         'CVSS Score',
         'Attack Vector',
-        'Complexity',
-        'Privileges',
+        'Attack Complexity',
+        'Privileges Required',
         'User Interaction',
         'Scope',
-        'Confidentiality',
-        'Integrity',
-        'Availability'
+        'Confidentiality Impact',
+        'Integrity Impact',
+        'Availability Impact'
     ]
     
     importances = model.feature_importances_
-    for name, importance in sorted(zip(feature_names, importances), 
-                                   key=lambda x: x[1], reverse=True):
-        print(f"   {name}: {importance:.3f}")
+    indices = np.argsort(importances)[::-1]
+    
+    for i in range(len(feature_names)):
+        idx = indices[i]
+        print(f"  {i+1}. {feature_names[idx]:25s}: {importances[idx]:.4f}")
+    
+    return accuracy
 
-def save_model(model, filename="models/vulnerability_classifier.pkl"):
+
+def save_model(model, filepath='models/vulnerability_classifier.pkl'):
     """
-    Salva il modello addestrato
+    Salva modello su disco
     
     Args:
-        model: Modello da salvare
-        filename: Path dove salvare
+        model: Modello addestrato
+        filepath: Path dove salvare
     """
     # Crea directory se non esiste
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     
-    # Salva il modello
-    joblib.dump(model, filename)
-    print(f"\n💾 Modello salvato in: {filename}")
-    print(f"   Dimensione file: {os.path.getsize(filename) / 1024:.2f} KB")
+    # Salva modello
+    with open(filepath, 'wb') as f:
+        pickle.dump(model, f)
+    
+    print(f"\n💾 Modello salvato: {filepath}")
+    
+    # Info file
+    size = os.path.getsize(filepath)
+    print(f"  Dimensione: {size / 1024:.1f} KB")
+
 
 def main():
-    """
-    Pipeline completa di training
-    """
-    print("=" * 60)
-    print("🤖 TRAINING MODELLO ML - VULNERABILITY CLASSIFIER")
-    print("=" * 60)
+    parser = argparse.ArgumentParser(
+        description='Addestra modello ML con dati NVD'
+    )
+    parser.add_argument(
+        '--dataset',
+        type=str,
+        default='data/nvd_cve_dataset.json',
+        help='Path al dataset (default: data/nvd_cve_dataset.json)'
+    )
+    parser.add_argument(
+        '--output',
+        type=str,
+        default='models/vulnerability_classifier.pkl',
+        help='Path output modello (default: models/vulnerability_classifier.pkl)'
+    )
+    parser.add_argument(
+        '--test-size',
+        type=float,
+        default=0.2,
+        help='Percentuale test set (default: 0.2)'
+    )
+    parser.add_argument(
+        '--min-accuracy',
+        type=float,
+        default=0.70,
+        help='Accuracy minima richiesta (default: 0.70)'
+    )
+    
+    args = parser.parse_args()
+    
+    print("="*70)
+    print("ML MODEL TRAINING WITH NVD DATA")
+    print("="*70)
+    print()
     
     # 1. Carica dataset
-    df = load_dataset()
+    data = load_dataset(args.dataset)
+    if not data:
+        return
+    
+    if len(data) < 50:
+        print(f"\n⚠️  ATTENZIONE: Dataset piccolo ({len(data)} campioni)")
+        print("   Raccomandazione: almeno 100 campioni per buona accuracy")
+        print("\n   Genera più dati con:")
+        print("   python3 src/ml/nvd_data_collector.py --samples 200 --days 180")
     
     # 2. Prepara features
-    X, y = prepare_features(df)
+    X, y = prepare_features(data)
     
-    # 3. Addestra modello
-    model, X_train, X_test, y_train, y_test = train_model(X, y)
+    if len(X) == 0:
+        print("\n❌ Errore: Nessun campione valido")
+        return
+    
+    # 3. Train modello
+    model, X_test, y_test, y_pred = train_model(
+        X, y,
+        test_size=args.test_size
+    )
     
     # 4. Valuta performance
-    evaluate_model(model, X_train, X_test, y_train, y_test)
+    accuracy = evaluate_model(model, X_test, y_test, y_pred)
     
-    # 5. Salva modello
-    save_model(model)
+    # 5. Verifica accuracy minima
+    if accuracy < args.min_accuracy:
+        print(f"\n⚠️  WARNING: Accuracy ({accuracy:.2%}) < soglia ({args.min_accuracy:.2%})")
+        print("   Il modello potrebbe non essere affidabile.")
+        print("\n   Suggerimenti:")
+        print("   - Raccogli più dati (--samples 300)")
+        print("   - Aumenta range temporale (--days 180)")
+        print("   - Aggiungi ricerca keywords (--keywords)")
+        print("\n   Salvare comunque? (s/n): ", end='')
+        
+        if input().lower() != 's':
+            print("   Modello non salvato.")
+            return
     
-    print("\n" + "=" * 60)
-    print("✅ TRAINING COMPLETATO CON SUCCESSO!")
-    print("=" * 60)
+    # 6. Salva modello
+    save_model(model, args.output)
+    
+    # 7. Istruzioni finali
+    print(f"\n{'='*70}")
+    print("✅ TRAINING COMPLETATO")
+    print(f"{'='*70}")
+    
+    print(f"\n🎯 Performance:")
+    print(f"  Accuracy: {accuracy:.2%}")
+    print(f"  Samples:  {len(X)}")
+    print(f"  Features: 9")
+    print(f"  Classes:  {len(set(y))}")
+    
+    print(f"\n🚀 Prossimi passi:")
+    print(f"  1. Testa il modello:")
+    print(f"     python3 src/ml/predict.py")
+    print(f"\n  2. Usa nel scanner:")
+    print(f"     python3 examples/ml_enhanced_scan.py scan.xml")
+    print(f"\n  3. Con NVD enrichment:")
+    print(f"     python3 examples/ml_enhanced_scan.py scan.xml --nvd")
 
-if __name__ == "__main__":
-    main()
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Training interrotto dall'utente")
+    except Exception as e:
+        print(f"\n❌ Errore: {e}")
+        import traceback
+        traceback.print_exc()

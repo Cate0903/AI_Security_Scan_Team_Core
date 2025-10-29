@@ -1,251 +1,168 @@
 '''
 ML Vulnerability Analyzer
-Integrates ML model into scanner pipeline
+Analizza vulnerabilità usando modello ML addestrato
 '''
 
+import os
 import pickle
 import numpy as np
-import os
+from pathlib import Path
 
 
 class VulnerabilityAnalyzer:
-    '''Analyzes vulnerabilities using ML'''
+    '''Analizzatore ML per vulnerabilità'''
     
-    def __init__(self, model_path='models/vulnerability_model.pkl'):
-        '''Initialize analyzer'''
-        self.model = None
+    def __init__(self, model_path=None):
+        '''
+        Inizializza analyzer
+        
+        Args:
+            model_path: Path al modello (default: models/vulnerability_classifier.pkl)
+        '''
+        if model_path is None:
+            # Cerca modello nella directory corretta
+            base_dir = Path(__file__).parent.parent.parent
+            model_path = base_dir / 'models' / 'vulnerability_classifier.pkl'
+        
         self.model_path = model_path
-        self.is_initialized = False
-        
-        # Encoding mappings
-        self.attack_vector_map = {
-            'NETWORK': 0, 'ADJACENT': 1, 'ADJACENT_NETWORK': 1,
-            'LOCAL': 2, 'PHYSICAL': 3
-        }
-        self.attack_complexity_map = {
-            'LOW': 0, 'HIGH': 1
-        }
-        self.privileges_map = {
-            'NONE': 0, 'LOW': 1, 'HIGH': 2
-        }
-        self.interaction_map = {
-            'NONE': 0, 'REQUIRED': 1
-        }
-        self.impact_map = {
-            'NONE': 0, 'LOW': 1, 'HIGH': 2
-        }
-        
-        self.severity_classes = ['CRITICAL', 'HIGH', 'LOW', 'MEDIUM']
-        
-        self._initialize()
+        self.model = None
+        self.load_model()
     
-    def _initialize(self):
-        '''Load ML model'''
+    def load_model(self):
+        '''Carica modello ML'''
         try:
-            if not os.path.exists(self.model_path):
+            if os.path.exists(self.model_path):
+                with open(self.model_path, 'rb') as f:
+                    self.model = pickle.load(f)
+                print(f"✓ ML Analyzer inizializzato")
+            else:
                 print(f"⚠ Modello non trovato: {self.model_path}")
-                return
-            
-            print(f"Caricamento modello ML...")
-            with open(self.model_path, 'rb') as f:
-                self.model = pickle.load(f)
-            
-            self.is_initialized = True
-            print("✓ Modello ML caricato")
-            
+                print(f"  Genera il modello con: python3 src/ml/train_model.py")
+                self.model = None
         except Exception as e:
             print(f"⚠ Errore caricamento modello: {e}")
-            self.is_initialized = False
+            self.model = None
     
-    def analyze(self, vulnerability_data):
-        '''Analyze single vulnerability'''
-        try:
-            if not self.is_initialized or self.model is None:
-                return self._fallback_analysis(vulnerability_data)
+    def prepare_features(self, vuln_data):
+        '''
+        Prepara features per predizione
+        
+        Args:
+            vuln_data: Dizionario con dati vulnerabilità
             
-            features = self._prepare_features(vulnerability_data)
-            prediction = self._predict(features)
-            risk_score = self._calculate_risk_score(vulnerability_data, prediction)
-            priority = self._assign_priority(risk_score)
-            recommendation = self._generate_recommendation(
-                prediction['severity'],
-                risk_score,
-                priority
-            )
-            
-            return {
-                'ml_available': True,
-                'predicted_severity': prediction['severity'],
-                'confidence': float(prediction['confidence']),
-                'risk_score': float(risk_score),
-                'priority': int(priority),
-                'recommendation': recommendation,
-                'probabilities': prediction['probabilities']
-            }
-            
-        except Exception as e:
-            print(f"⚠ Errore analisi ML: {e}")
-            return self._fallback_analysis(vulnerability_data)
-    
-    def _prepare_features(self, vuln_data):
-        '''Transform vulnerability data to ML features'''
-        features = []
+        Returns:
+            numpy array con features
+        '''
+        # Mapping per valori categorici
+        attack_vector_map = {'NETWORK': 2, 'ADJACENT': 1, 'LOCAL': 0, 'PHYSICAL': 0}
+        attack_complexity_map = {'LOW': 1, 'HIGH': 0}
+        privileges_map = {'NONE': 2, 'LOW': 1, 'HIGH': 0}
+        user_interaction_map = {'NONE': 1, 'REQUIRED': 0}
+        scope_map = {'CHANGED': 1, 'UNCHANGED': 0}
+        impact_map = {'HIGH': 2, 'LOW': 1, 'NONE': 0}
         
-        # CVSS Score
-        cvss = float(vuln_data.get('cvss_score', 5.0))
-        features.append(cvss)
-        
-        # Attack Vector
-        av = vuln_data.get('attack_vector', 'LOCAL').upper()
-        features.append(self.attack_vector_map.get(av, 2))
-        
-        # Attack Complexity
-        ac = vuln_data.get('attack_complexity', 'HIGH').upper()
-        features.append(self.attack_complexity_map.get(ac, 1))
-        
-        # Privileges Required
-        pr = vuln_data.get('privileges_required', 'LOW').upper()
-        features.append(self.privileges_map.get(pr, 1))
-        
-        # User Interaction
-        ui = vuln_data.get('user_interaction', 'NONE').upper()
-        features.append(self.interaction_map.get(ui, 0))
-        
-        # Impacts
-        ci = vuln_data.get('confidentiality_impact', 'NONE').upper()
-        features.append(self.impact_map.get(ci, 0))
-        
-        ii = vuln_data.get('integrity_impact', 'NONE').upper()
-        features.append(self.impact_map.get(ii, 0))
-        
-        ai = vuln_data.get('availability_impact', 'NONE').upper()
-        features.append(self.impact_map.get(ai, 0))
+        # Estrai features
+        features = [
+            float(vuln_data.get('cvss_score', 0.0)),
+            attack_vector_map.get(vuln_data.get('attack_vector', 'LOCAL'), 0),
+            attack_complexity_map.get(vuln_data.get('attack_complexity', 'HIGH'), 0),
+            privileges_map.get(vuln_data.get('privileges_required', 'HIGH'), 0),
+            user_interaction_map.get(vuln_data.get('user_interaction', 'REQUIRED'), 0),
+            scope_map.get(vuln_data.get('scope', 'UNCHANGED'), 0),
+            impact_map.get(vuln_data.get('confidentiality_impact', 'NONE'), 0),
+            impact_map.get(vuln_data.get('integrity_impact', 'NONE'), 0),
+            impact_map.get(vuln_data.get('availability_impact', 'NONE'), 0)
+        ]
         
         return np.array(features).reshape(1, -1)
     
-    def _predict(self, features):
-        '''Execute ML prediction'''
-        prediction_class = self.model.predict(features)[0]
-        probabilities = self.model.predict_proba(features)[0]
+    def analyze(self, vuln_data):
+        '''
+        Analizza vulnerabilità con ML
         
-        severity = self.severity_classes[prediction_class]
-        confidence = probabilities[prediction_class]
-        
-        prob_dict = {}
-        for i, sev in enumerate(self.severity_classes):
-            prob_dict[sev] = float(probabilities[i])
-        
-        return {
-            'severity': severity,
-            'confidence': confidence,
-            'probabilities': prob_dict
-        }
-    
-    def _calculate_risk_score(self, vuln_data, prediction):
-        '''Calculate risk score combining CVSS and ML'''
-        cvss = float(vuln_data.get('cvss_score', 5.0))
-        ml_confidence = prediction['confidence']
-        
-        # Base from CVSS (70%)
-        risk = cvss * 0.7
-        
-        # ML adjustment (30%)
-        severity_weights = {
-            'LOW': 0.0,
-            'MEDIUM': 0.3,
-            'HIGH': 0.6,
-            'CRITICAL': 1.0
+        Args:
+            vuln_data: Dizionario con dati vulnerabilità
+            
+        Returns:
+            dict: Risultato analisi con predizione e confidenza
+        '''
+        result = {
+            'ml_available': self.model is not None,
+            'predicted_severity': None,
+            'ml_confidence': 0.0,
+            'original_severity': vuln_data.get('severity', 'UNKNOWN')
         }
         
-        ml_adjustment = severity_weights.get(prediction['severity'], 0.5) * 3.0
-        risk += ml_adjustment * 0.3
+        if self.model is None:
+            return result
         
-        # Boost if high confidence
-        if ml_confidence > 0.8:
-            risk *= 1.1
+        try:
+            # Prepara features
+            X = self.prepare_features(vuln_data)
+            
+            # Predici
+            prediction = self.model.predict(X)[0]
+            probabilities = self.model.predict_proba(X)[0]
+            
+            # Trova confidenza per la classe predetta
+            class_idx = list(self.model.classes_).index(prediction)
+            confidence = probabilities[class_idx]
+            
+            result['predicted_severity'] = prediction
+            result['ml_confidence'] = float(confidence)
+            result['severity_agreement'] = (prediction == result['original_severity'])
+            
+        except Exception as e:
+            print(f"⚠ Errore analisi ML: {e}")
         
-        return max(0.0, min(10.0, risk))
-    
-    def _assign_priority(self, risk_score):
-        '''Assign priority 1-4'''
-        if risk_score >= 9.0:
-            return 1
-        elif risk_score >= 7.0:
-            return 2
-        elif risk_score >= 4.0:
-            return 3
-        else:
-            return 4
-    
-    def _generate_recommendation(self, severity, risk_score, priority):
-        '''Generate recommendation text'''
-        recommendations = {
-            (1, 'CRITICAL'): "🔴 AZIONE IMMEDIATA! Patch entro 24 ore.",
-            (1, 'HIGH'): "🔴 URGENTE: Patch entro 48 ore.",
-            (2, 'HIGH'): "🟠 IMPORTANTE: Patch entro 1 settimana.",
-            (2, 'MEDIUM'): "🟠 Patch entro 2 settimane.",
-            (3, 'MEDIUM'): "🟡 Patch entro 1 mese.",
-            (3, 'LOW'): "🟡 Patch quando possibile.",
-            (4, 'LOW'): "🟢 Priorità bassa."
-        }
-        
-        key = (priority, severity)
-        return recommendations.get(key, "Valuta remediation.")
-    
-    def _fallback_analysis(self, vuln_data):
-        '''Fallback when ML not available'''
-        cvss = float(vuln_data.get('cvss_score', 5.0))
-        
-        if cvss >= 9.0:
-            severity = 'CRITICAL'
-        elif cvss >= 7.0:
-            severity = 'HIGH'
-        elif cvss >= 4.0:
-            severity = 'MEDIUM'
-        else:
-            severity = 'LOW'
-        
-        risk_score = cvss
-        priority = self._assign_priority(risk_score)
-        recommendation = self._generate_recommendation(severity, risk_score, priority)
-        
-        return {
-            'ml_available': False,
-            'predicted_severity': severity,
-            'confidence': 0.7,
-            'risk_score': float(risk_score),
-            'priority': int(priority),
-            'recommendation': recommendation,
-            'probabilities': None
-        }
+        return result
 
 
+# Test standalone
 if __name__ == '__main__':
-    # Test
     print("="*60)
-    print("TEST ML ANALYZER")
+    print("ML VULNERABILITY ANALYZER TEST")
     print("="*60)
     
     analyzer = VulnerabilityAnalyzer()
     
-    test_vuln = {
-        'cve_id': 'CVE-TEST',
-        'cvss_score': 9.8,
-        'attack_vector': 'NETWORK',
-        'attack_complexity': 'LOW',
-        'privileges_required': 'NONE',
-        'user_interaction': 'NONE',
-        'confidentiality_impact': 'HIGH',
-        'integrity_impact': 'HIGH',
-        'availability_impact': 'HIGH'
-    }
-    
-    result = analyzer.analyze(test_vuln)
-    
-    print(f"\nSeverity: {result['predicted_severity']}")
-    print(f"Confidence: {result['confidence']*100:.1f}%")
-    print(f"Risk Score: {result['risk_score']:.2f}/10")
-    print(f"Priority: {result['priority']}")
-    print(f"Recommendation: {result['recommendation']}")
-    
-    print("\n" + "="*60)
+    if analyzer.model is None:
+        print("\n❌ Modello non disponibile")
+        print("\nPer generare il modello:")
+        print("  1. python3 src/ml/cve_collector.py")
+        print("  2. python3 src/ml/train_model.py")
+        print("\nOppure usa il file di test:")
+        print("  python3 check_and_create_test.py")
+    else:
+        print("\n✓ Modello caricato con successo")
+        
+        # Test case
+        test_vuln = {
+            'cve_id': 'CVE-TEST-0001',
+            'cvss_score': 9.8,
+            'severity': 'CRITICAL',
+            'attack_vector': 'NETWORK',
+            'attack_complexity': 'LOW',
+            'privileges_required': 'NONE',
+            'user_interaction': 'NONE',
+            'scope': 'UNCHANGED',
+            'confidentiality_impact': 'HIGH',
+            'integrity_impact': 'HIGH',
+            'availability_impact': 'HIGH'
+        }
+        
+        print("\n📋 Test vulnerabilità:")
+        print(f"  CVE: {test_vuln['cve_id']}")
+        print(f"  CVSS: {test_vuln['cvss_score']}")
+        print(f"  Severity originale: {test_vuln['severity']}")
+        
+        result = analyzer.analyze(test_vuln)
+        
+        print(f"\n🔮 Risultato analisi ML:")
+        print(f"  Severity predetta: {result['predicted_severity']}")
+        print(f"  Confidenza: {result['ml_confidence']:.1%}")
+        print(f"  Accordo: {'✓' if result['severity_agreement'] else '✗'}")
+        
+        print("\n" + "="*60)
+        print("✅ TEST COMPLETATO")
+        print("="*60)
