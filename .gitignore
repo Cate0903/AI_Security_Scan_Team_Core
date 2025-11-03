@@ -19,6 +19,8 @@ logs/
 scan_results/
 *.xml
 *.json
+*.html
+reports/
 
 # OS
 .DS_Store
