@@ -18,18 +18,11 @@ class DashboardGenerator:
     def generate_dashboard(self, scan_results, plots_dir='reports/plots'):
         '''
         Genera dashboard HTML completo
-        
-        Args:
-            scan_results: dict con results (from parse_with_ml)
-            plots_dir: directory con grafici (assoluta o relativa alla repo)
-            
-        Returns:
-            str: path al file HTML
         '''
         vulnerabilities = scan_results.get('vulnerabilities', [])
         summary = scan_results.get('summary', {})
         
-        # Calcola il path RELATIVO dei plot rispetto alla cartella dove salvi l'HTML (self.output_dir)
+        # Path RELATIVO dei plot rispetto alla cartella output
         rel_plots_dir = os.path.relpath(plots_dir, start=self.output_dir).replace(os.sep, '/')
         
         # Generate HTML
@@ -46,32 +39,90 @@ class DashboardGenerator:
         print(f'✓ Dashboard salvato: {filepath}')
         return filepath
     
+    # -------------------- helpers logici (no stile) --------------------
+
+    @staticmethod
+    def _safe_float(x, default=0.0):
+        try:
+            return float(x)
+        except Exception:
+            return default
+
+    @staticmethod
+    def _safe_int(x, default=0):
+        try:
+            return int(x)
+        except Exception:
+            return default
+
+    @staticmethod
+    def _priority_from_risk(r):
+        if r >= 9.0:  return 1
+        if r >= 7.0:  return 2
+        if r >= 4.0:  return 3
+        return 4
+
+    def _normalized_risk(self, v):
+        """
+        Usa SEMPRE i campi normalizzati se presenti:
+        - risk_score (top-level) -> principale
+        - fallback: ml/ml_analysis.risk_score
+        - fallback ulteriore: cvss_score (se proprio serve)
+        """
+        if isinstance(v.get('risk_score'), (int, float)):
+            return float(v['risk_score'])
+        ml = v.get('ml') or v.get('ml_analysis') or {}
+        if isinstance(ml.get('risk_score'), (int, float)):
+            return float(ml['risk_score'])
+        return self._safe_float(v.get('cvss_score'), 0.0)
+
+    def _normalized_priority(self, v):
+        """
+        Usa SEMPRE priority normalizzata se c'è; altrimenti derivala dal risk.
+        """
+        p = v.get('priority')
+        if p is not None:
+            return self._safe_int(p, 4)
+        ml = v.get('ml') or v.get('ml_analysis') or {}
+        if ml.get('priority') is not None:
+            return self._safe_int(ml.get('priority'), 4)
+        return self._priority_from_risk(self._normalized_risk(v))
+
+    def _dedup_top(self, vulnerabilities, top_n=10):
+        """
+        Deduplica per (cve_id, ip_address, port) tenendo la riga con risk_score più alto.
+        """
+        best = {}
+        for v in vulnerabilities:
+            key = (v.get('cve_id') or 'N/A', v.get('ip_address'), v.get('port'))
+            r = self._normalized_risk(v)
+            cur = best.get(key)
+            if cur is None or r > self._normalized_risk(cur):
+                best[key] = v
+        top = list(best.values())
+        top.sort(key=lambda x: (-self._normalized_risk(x), self._normalized_priority(x)))
+        return top[:top_n]
+
+    # -------------------- template HTML (stile invariato) --------------------
+
     def _generate_html_template(self, vulnerabilities, summary, plots_dir):
-        '''Generate complete HTML'''
+        '''Generate complete HTML (stile invariato)'''
         
         # ----- Stats di riepilogo -----
         total = summary.get('total', len(vulnerabilities))
         by_severity = summary.get('by_severity', {})
         by_priority = summary.get('by_priority', {})
-        # Count critical/urgent (gestisci chiavi int/str)
         critical_count = by_severity.get('CRITICAL', 0)
         urgent_count = by_priority.get(1, by_priority.get('1', 0))
 
-        # Average risk (usa ML se c'è, altrimenti CVSS)
-        def _derive_risk(v):
-            ml = v.get('ml_analysis') or {}
-            if isinstance(ml.get('risk_score'), (int, float)):
-                return float(ml['risk_score'])
-            cvss = v.get('cvss_score')
-            try:
-                return float(cvss) if cvss is not None else 0.0
-            except (TypeError, ValueError):
-                return 0.0
-
-        risks_all = [_derive_risk(v) for v in vulnerabilities] if vulnerabilities else []
-        avg_risk = (sum(risks_all) / len(risks_all)) if risks_all else 0.0
+        # Average risk: preferisci summary.average_risk, altrimenti calcola dai risk_score normalizzati
+        if isinstance(summary.get('average_risk'), (int, float)):
+            avg_risk = float(summary['average_risk'])
+        else:
+            risks_all = [self._normalized_risk(v) for v in vulnerabilities] if vulnerabilities else []
+            avg_risk = (sum(risks_all) / len(risks_all)) if risks_all else 0.0
         
-        # ----- HTML head & layout -----
+        # ----- HTML head & layout (INVARIATO) -----
         html = f'''<!DOCTYPE html>
 <html lang="it">
 <head>
@@ -253,7 +304,7 @@ class DashboardGenerator:
             
             <div class="stat-card">
                 <div class="stat-label">Urgent Actions</div>
-                <div class="stat-value high">{urgent_count}</div>
+                <div class="stat-value high">{by_priority.get(1, by_priority.get('1', 0))}</div>
             </div>
             
             <div class="stat-card">
@@ -287,26 +338,7 @@ class DashboardGenerator:
         <div class="vulnerability-list">
             <h2>🚨 Top 10 Highest Risk Vulnerabilities</h2>
 '''
-        # ----- Sezione TOP 10 (funzioni helper annidate) -----
-        def _priority_from(v):
-            ml = v.get('ml_analysis') or {}
-            pr = ml.get('priority')
-            if isinstance(pr, int):
-                return pr
-            sev = (v.get('severity') or 'UNKNOWN').upper()
-            return {'CRITICAL': 1, 'HIGH': 2, 'MEDIUM': 3, 'LOW': 4}.get(sev, 4)
-
-        def _risk_from(v):
-            ml = v.get('ml_analysis') or {}
-            r = ml.get('risk_score')
-            if isinstance(r, (int, float)):
-                return float(r)
-            cvss = v.get('cvss_score')
-            try:
-                return float(cvss) if cvss is not None else 0.0
-            except (TypeError, ValueError):
-                return 0.0
-
+        # ----- Top 10: dedup per (CVE, IP, Port) e sort su risk/priority (logica invariata nel rendering) -----
         def _rec_from(priority):
             if priority == 1:
                 return '🔴 Azione immediata: isolare, patchare, mitigare entro 24h.'
@@ -316,17 +348,7 @@ class DashboardGenerator:
                 return '🟡 Pianificare fix: inserire in sprint/maintenance.'
             return '🟢 Monitorare e documentare: rischio basso.'
 
-        # Costruisci candidati ordinabili
-        candidates = []
-        for v in vulnerabilities:
-            pr = _priority_from(v)
-            rk = _risk_from(v)
-            rec = (v.get('ml_analysis') or {}).get('recommendation') or _rec_from(pr)
-            candidates.append((rk, pr, rec, v))
-
-        # Ordina per rischio desc, poi priorità asc (1 più urgente)
-        candidates = sorted(candidates, key=lambda t: (-t[0], t[1]))
-        top_10 = candidates[:10]
+        top_10 = self._dedup_top(vulnerabilities, top_n=10)
 
         if not top_10:
             html += '''
@@ -336,10 +358,14 @@ class DashboardGenerator:
             </div>
             '''
         else:
-            for rk, pr, rec, vuln in top_10:
+            for vuln in top_10:
+                rk = self._normalized_risk(vuln)
+                pr = self._normalized_priority(vuln)
+                rec = (vuln.get('ml') or vuln.get('ml_analysis') or {}).get('recommendation') or _rec_from(pr)
+
                 cve_id = vuln.get('cve_id', 'Unknown')
                 severity = (vuln.get('severity', 'UNKNOWN') or 'UNKNOWN').lower()
-                cvss = vuln.get('cvss_score', 0)
+                cvss = vuln.get('cvss_score', '')
 
                 html += f'''
                 <div class="vulnerability-item {severity}">
@@ -371,50 +397,3 @@ class DashboardGenerator:
 </html>
 '''
         return html
-
-
-if __name__ == '__main__':
-    # Test manuale
-    print('='*60)
-    print('TEST DASHBOARD GENERATOR')
-    print('='*60)
-    
-    # Mock data
-    test_results = {
-        'vulnerabilities': [
-            {
-                'cve_id': 'CVE-2024-0001',
-                'cvss_score': 9.8,
-                'severity': 'CRITICAL',
-                'ml_analysis': {
-                    'ml_available': True,
-                    'risk_score': 9.5,
-                    'priority': 1,
-                    'recommendation': '🔴 AZIONE IMMEDIATA!'
-                }
-            },
-            {
-                'cve_id': 'CVE-2024-0002',
-                'cvss_score': 7.5,
-                'severity': 'HIGH',
-                'ml_analysis': {
-                    'ml_available': True,
-                    'risk_score': 7.8,
-                    'priority': 2,
-                    'recommendation': '🟠 Patch entro 1 settimana'
-                }
-            },
-        ],
-        'summary': {
-            'total': 2,
-            'by_severity': {'CRITICAL': 1, 'HIGH': 1},
-            'by_priority': {1: 1, 2: 1},
-            'top_risks': []
-        }
-    }
-    
-    generator = DashboardGenerator()
-    filepath = generator.generate_dashboard(test_results)
-    
-    print(f'\n✓ Apri con browser: {filepath}')
-    print('='*60)
