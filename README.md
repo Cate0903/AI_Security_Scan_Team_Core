@@ -153,7 +153,7 @@ ai-security-scanner/
 
 ## Normalizzazione del punteggio di rischio
 
-Il sistema considera il massimo tra:
+**Il sistema considera il massimo tra:**
 
 - Punteggio ML
 
@@ -198,7 +198,7 @@ priority_mapping
 
 ## Dashboard
 
-Interattiva, stampabile e strutturata in:
+**Interattiva, stampabile e strutturata in:**
 
 - Indicatori KPI di alto livello
 
@@ -212,7 +212,7 @@ Interattiva, stampabile e strutturata in:
 
 ## Integrazione CI/CD
 
-Esempio di step di pipeline che fallisce in presenza di vulnerabilità P1:
+**Esempio di step di pipeline che fallisce in presenza di vulnerabilità P1:**
 
 ```bash
 
