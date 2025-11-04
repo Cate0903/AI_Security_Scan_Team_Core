@@ -14,12 +14,12 @@ AI-powered security scanner using Nmap...
 AI Security Scanner è uno strumento open-source per l’analisi automatizzata delle vulnerabilità in ambienti DevSecOps, pipeline CI/CD e infrastrutture applicative.
 Integra analisi basate su machine learning, punteggi di rischio normalizzati, arricchimento NVD e reporting interattivo.
 
-✅ Ideale per penetration tester, analisti SOC, DevOps e ingegneri della sicurezza
-✅ Importa e analizza scansioni Nmap (formato XML)
-✅ Assegna punteggi di rischio ML normalizzati
-✅ Genera dashboard HTML interattive con grafici
+✅ Ideale per penetration tester, analisti SOC, DevOps e ingegneri della sicurezza  
+✅ Importa e analizza scansioni Nmap (formato XML)  
+✅ Assegna punteggi di rischio ML normalizzati  
+✅ Genera dashboard HTML interattive con grafici  
 
-##Funzionalità principali
+## Funzionalità principali
 
 - Analisi avanzata delle vulnerabilità (Nmap XML)
 
@@ -43,7 +43,7 @@ Integra analisi basate su machine learning, punteggi di rischio normalizzati, ar
 
 - Esportazione completa in JSON per integrazioni di sistema
 
-##Come funziona
+## Come funziona
 
 Pipeline di elaborazione:
 
@@ -67,7 +67,7 @@ Pipeline di elaborazione:
 
 6. I grafici e i metadati JSON vengono salvati per audit e analisi
 
-##Installazione
+## Installazione
 
 ```bash
 git clone https://github.com/Cate0903/AI_Security_Scan_Team_Core.git
@@ -77,7 +77,7 @@ pip install -r requirements.txt
 ```
 Richiede Python ≥ 3.10
 
-##Esecuzione rapida
+## Esecuzione rapida
 
 Generare un report completo da un file Nmap XML:
 
@@ -91,7 +91,7 @@ Aprire la dashboard:
 xdg-open reports/dashboard_*.html
 ```
 
-##Esempio di output (CLI)
+## Esempio di output (CLI)
 
 ```bash
 [STEP 1/5] Parsing and ML Analysis...
@@ -115,7 +115,7 @@ Punti d’ingresso: 4
 [STEP 5/5] Report JSON salvato: scan_full_complete_report.json
 ```
 
-##Configurazione
+## Configurazione
 
 Abilitare/disabilitare controlli:
 
@@ -128,7 +128,7 @@ ml: true
 risk_normalization: true
 ```
 
-##Struttura del progetto
+## Struttura del progetto
 
 ```
 ai-security-scanner/
@@ -151,7 +151,7 @@ ai-security-scanner/
 └── ...
 ```
 
-##Normalizzazione del punteggio di rischio
+## Normalizzazione del punteggio di rischio
 
 Il sistema considera il massimo tra:
 
@@ -182,7 +182,7 @@ Punteggio di rischio | Priorità | Azione
 ≥ 4.0 | P3 | Correzione pianificata
 < 4.0 | P4 | Monitoraggio
 
-##Grafici generati
+## Grafici generati
 
 - Distribuzione delle severità
 
@@ -192,7 +192,7 @@ Punteggio di rischio | Priorità | Azione
 
 - Top vulnerabilità (uniche per CVE)
 
-##Dashboard
+## Dashboard
 
 Interattiva, stampabile e strutturata in:
 
@@ -206,7 +206,7 @@ Interattiva, stampabile e strutturata in:
 
 - Raccomandazioni di mitigazione
 
-##Integrazione CI/CD
+## Integrazione CI/CD
 
 Esempio di step di pipeline che fallisce in presenza di vulnerabilità P1:
 
@@ -216,19 +216,19 @@ grep '"priority": 1' scan_full_complete_report.json
 | wc -l | awk '$1 > 0 { exit 1 }'
 ```
 
-##Test
+## Test
 
 ```bash
 pytest
 ```
 pytest è uno strumento che esegue automaticamente test di verifica sulle funzioni principali del progetto, per assicurarsi che tutto funzioni correttamente e che eventuali errori vengano rilevati subito.
 
-##Nota importante
+## Nota importante
 
 Questo strumento non sostituisce l’analisi umana.
 Serve ad accelerare il triage, ma il giudizio di un esperto resta indispensabile.
 
-##Piano di sviluppo futuro
+## Piano di sviluppo futuro
 
 - Esportazione nativa in PDF
 
@@ -242,7 +242,7 @@ Serve ad accelerare il triage, ma il giudizio di un esperto resta indispensabile
 
 - Analisi storica e trend nel tempo
 
-##Licenza
+## Licenza
 
 MIT — libera anche per uso commerciale.
 
