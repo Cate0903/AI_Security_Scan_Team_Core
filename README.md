@@ -45,7 +45,7 @@ Integra analisi basate su machine learning, punteggi di rischio normalizzati, ar
 
 ## Come funziona
 
-Pipeline di elaborazione:
+**Pipeline di elaborazione:**
 
 1. Le vulnerabilità vengono estratte dal report di scansione
 
@@ -79,13 +79,13 @@ Richiede Python ≥ 3.10
 
 ## Esecuzione rapida
 
-Generare un report completo da un file Nmap XML:
+**Generare un report completo da un file Nmap XML:**
 
 ```bash
 python examples/generate_report.py scan_full.xml --nvd
 ```
 
-Aprire la dashboard:
+**Aprire la dashboard:**
 
 ```bash
 xdg-open reports/dashboard_*.html
@@ -117,7 +117,7 @@ Punti d’ingresso: 4
 
 ## Configurazione
 
-Abilitare/disabilitare controlli:
+**Abilitare/disabilitare controlli:**
 
 ```yaml
 nvd:
@@ -163,7 +163,7 @@ Il sistema considera il massimo tra:
 
 - Mappatura di priorità
 
-Formula semplificata:
+**Formula semplificata:**
 
 ```python
 risk_normalized = max(
@@ -174,13 +174,17 @@ priority_mapping
 )
 ```
 
-Soglie di priorità:
 
-Punteggio di rischio | Priorità | Azione
-≥ 9.0 | P1 | Mitigazione immediata
-≥ 7.0 | P2 | Alta priorità
-≥ 4.0 | P3 | Correzione pianificata
-< 4.0 | P4 | Monitoraggio
+**Soglie di priorità:**
+
+| Punteggio di rischio | Priorità | Azione consigliata        |
+|----------------------:|:----------:|----------------------------|
+| ≥ 9.0                | P1        | Mitigazione immediata     |
+| ≥ 7.0                | P2        | Alta priorità             |
+| ≥ 4.0                | P3        | Correzione pianificata    |
+| < 4.0                | P4        | Monitoraggio              |
+
+
 
 ## Grafici generati
 
