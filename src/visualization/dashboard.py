@@ -130,18 +130,25 @@ class DashboardGenerator:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Security Dashboard - {datetime.now().strftime('%Y-%m-%d')}</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600&display=swap');
+
         * {{
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }}
         
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #333;
-            padding: 2rem;
+    	body {{
+               font-family: 'Inter', sans-serif;
+ 	       background:
+   	       radial-gradient(circle at 30% 40%, rgba(0,255,255,0.30), transparent 55%),
+    	       radial-gradient(circle at 70% 60%, rgba(0,255,255,0.3), transparent 55%),
+   	       #050510;
+  	       color: #e0e0e0;
+   	       padding: 2rem;
+  	       min-height: 100vh;
         }}
+
         
         .container {{
             max-width: 1400px;
@@ -149,22 +156,28 @@ class DashboardGenerator:
         }}
         
         header {{
-            background: white;
+            text-align: center;
             padding: 2rem;
-            border-radius: 15px;
             margin-bottom: 2rem;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }}
+
         
         h1 {{
-            color: #667eea;
-            margin-bottom: 0.5rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.6rem;
+            color: #00FFFF;
+            text-shadow: 0 0 10px #00FFFF, 0 0 25px #00FFFF55;
+            animation: pulse 3s infinite;
         }}
+        @keyframes pulse {{
+            0%, 100% {{ text-shadow: 0 0 10px #00FFFF, 0 0 25px #00FFFF55; }}
+            50% {{ text-shadow: 0 0 20px #00FFFF, 0 0 40px #00FFFFaa; }}
+        }}
+
         
-        .subtitle {{
-            color: #666;
-            font-size: 1.1rem;
-        }}
+        .subtitle {{ color: #00FFFF;
+	 	     margin-top: 1.9rem;
+	 }}
         
         .stats-grid {{
             display: grid;
@@ -174,109 +187,135 @@ class DashboardGenerator:
         }}
         
         .stat-card {{
-            background: white;
-            padding: 1.5rem;
+            background: rgba(25, 25, 40, 0.6);
             border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+	    backdrop-filter: blur(10px);
+	    border: 2px solid rgba(0, 255, 255, 0.25);
+	    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
         }}
+
         
         .stat-value {{
-            font-size: 2.5rem;
+	    font-family: 'Orbitron', sans-serif;
+            font-size: 2.6rem;
             font-weight: bold;
             margin: 0.5rem 0;
+	    color: #00FFFF;
         }}
-        
-        .stat-label {{
-            color: #666;
-            font-size: 0.9rem;
-            text-transform: uppercase;
+
+	.stat-card:hover {{
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.4);
+            transform: translateY(-3px);
         }}
+
         
-        .critical {{ color: #d32f2f; }}
-        .high {{ color: #f57c00; }}
-        .medium {{ color: #fbc02d; }}
-        .low {{ color: #388e3c; }}
-        
+        .stat-label {{ color: #00FFFF;
+	               font-family: 'Orbitron', sans-serif;
+		       text-transform: uppercase;
+		       font-size: 0.85rem;
+	               letter-spacing: 1px;
+		       font-weight: bold;
+	}}
+          .critical {{
+ 			 color: #ff4d4d;
+			 text-shadow: 0 0 10px #ff4d4d55;
+	}}
+
+	  .high {{
+			color: #ffb300;
+			text-shadow: 0 0 10px #ffb30055;
+	}}
+
+	  .medium {{
+			color: #00ffff;
+			text-shadow: 0 0 10px #00e5ff55;
+	}}
+
+	  .low {{
+			color: #6eff9f;
+			text-shadow: 0 0 10px #6eff9f55;
+	}}
+
         .charts-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
             gap: 2rem;
             margin-bottom: 2rem;
-        }}
+	 }}
         
         .chart-card {{
-            background: white;
-            padding: 1.5rem;
+            background: rgba(25, 25, 40, 0.6);
+            border: 2px solid rgba(0, 255, 255, 0.25);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
             border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
         }}
+
         
         .chart-card h2 {{
+            color: #00FFFF;
+            font-family: 'Orbitron', sans-serif;
             margin-bottom: 1rem;
-            color: #667eea;
         }}
+
         
         .chart-card img {{
             width: 100%;
-            height: auto;
             border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
         }}
         
         .vulnerability-list {{
-            background: white;
-            padding: 1.5rem;
+            background: rgba(20, 20, 35, 0.7);
             border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
         }}
-        
+
+	.vulnerability-list h2 {{
+	    color: #00FFFF;
+	    font-family: 'Orbitron', sans-serif;
+	    margin-bottom: 1rem;
+	}}
+
         .vulnerability-item {{
-            padding: 1rem;
-            border-left: 4px solid #ddd;
+            background: rgba(35, 35, 55, 0.6);
             margin-bottom: 1rem;
-            background: #f9f9f9;
-            border-radius: 5px;
-        }}
-        
-        .vulnerability-item.critical {{ border-left-color: #d32f2f; }}
-        .vulnerability-item.high {{ border-left-color: #f57c00; }}
-        .vulnerability-item.medium {{ border-left-color: #fbc02d; }}
-        .vulnerability-item.low {{ border-left-color: #388e3c; }}
-        
-        .vuln-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }}
-        
-        .vuln-cve {{
-            font-weight: bold;
-            font-size: 1.1rem;
-        }}
-        
-        .vuln-score {{
-            background: #667eea;
-            color: white;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.9rem;
-        }}
-        
-        .recommendation {{
-            margin-top: 0.5rem;
-            padding: 0.5rem;
-            background: #fff3cd;
-            border-radius: 5px;
-            font-size: 0.9rem;
-        }}
-        
-        footer {{
-            text-align: center;
-            color: white;
-            margin-top: 2rem;
+            border-left: 4px solid #00FFFF55;
             padding: 1rem;
+            border-radius: 8px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }}
-        
+        .vulnerability-item:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }}
+        .vuln-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }}
+        .vuln-cve {{ font-weight: bold; color: #00FFFF; font-family: 'Orbitron', sans-serif; }}
+        .vuln-score {{
+            background: linear-gradient(90deg, #00e5ff, #00bfa5);
+            color: #0a0a0f;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }}
+        .recommendation {{ margin-top: 0.6rem;
+	    		   font-size: 0.9rem;
+			   color: #00ffff;
+	 }}
+
+        footer {{ text-align: center;
+		  color: #555;
+		  font-size: 0.9rem;
+		  margin-top: 2rem;
+		  padding: 1rem;
+	 }}
+
         @media (max-width: 768px) {{
             .charts-grid {{
                 grid-template-columns: 1fr;
@@ -287,7 +326,7 @@ class DashboardGenerator:
 <body>
     <div class="container">
         <header>
-            <h1>🛡️ Security Vulnerability Dashboard</h1>
+            <h1>🛡️ AI Vulnerability Scanner</h1>
             <p class="subtitle">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
         </header>
         
@@ -315,28 +354,28 @@ class DashboardGenerator:
         
         <div class="charts-grid">
             <div class="chart-card">
-                <h2>📊 Severity Distribution</h2>
+                <h2> Severity Distribution</h2>
                 <img src="{plots_dir}/severity_dist.png" alt="Severity Distribution">
             </div>
             
             <div class="chart-card">
-                <h2>🎯 Priority Distribution</h2>
+                <h2> Priority Distribution</h2>
                 <img src="{plots_dir}/priority_dist.png" alt="Priority Distribution">
             </div>
             
             <div class="chart-card">
-                <h2>📈 Risk Score Distribution</h2>
+                <h2> Risk Score Distribution</h2>
                 <img src="{plots_dir}/risk_dist.png" alt="Risk Distribution">
             </div>
             
             <div class="chart-card">
-                <h2>🔝 Top Vulnerabilities</h2>
+                <h2> Top Vulnerabilities</h2>
                 <img src="{plots_dir}/top_vulns.png" alt="Top Vulnerabilities">
             </div>
         </div>
         
         <div class="vulnerability-list">
-            <h2>🚨 Top 10 Highest Risk Vulnerabilities</h2>
+            <h2> Top 10 Highest Risk Vulnerabilities</h2>
 '''
         # ----- Top 10: dedup per (CVE, IP, Port) e sort su risk/priority (logica invariata nel rendering) -----
         def _rec_from(priority):
@@ -379,7 +418,7 @@ class DashboardGenerator:
                         <strong>Priority:</strong> {pr}
                     </div>
                     <div class="recommendation">
-                        💡 {rec}
+                         {rec}
                     </div>
                 </div>
                 '''
@@ -389,8 +428,7 @@ class DashboardGenerator:
         </div>
         
         <footer>
-            <p>Generated by AI Security Scanner 🤖</p>
-            <p>Machine Learning Enhanced | NVD Integrated</p>
+            <p>Generated by AI Security Scanner | Machine Learning Enhanced | NVD Integrated | Created by Team Core</p>
         </footer>
     </div>
 </body>
