@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.parser.xml_parser import parse_with_ml
+from src.parser.xml_parser_FASTMODE import parse_with_ml
 from src.visualization.plotter import VulnerabilityPlotter
 from src.visualization.dashboard import DashboardGenerator
 from src.security.attack_surface import AttackSurfaceAnalyzer

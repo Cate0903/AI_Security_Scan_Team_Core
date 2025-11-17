@@ -26,3 +26,7 @@ reports/
 .DS_Store
 Thumbs.db
 .env
+
+reports/plots/*.png
+src.zip
+htmlcov/
